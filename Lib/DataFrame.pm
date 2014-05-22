@@ -1,12 +1,11 @@
-#!/usr/bin/perl
 use warnings;
 use strict;
 use threads;
 use threads::shared;
 use FindBin;
-use lib "$FindBin::Bin/../Library";
+use lib "$FindBin::Bin/../Lib";
 use Configuration;
-use hdpTools;
+use Tools;
 package DataFrame;
 
 
@@ -88,75 +87,6 @@ sub getIDsByMinValueRatio {
 	return \@GRs;
 }
 
-
-sub printPerturbedFrame {
-	my $self=shift;
-	my $out =shift;
-	my $del =shift;
-	my @names=@{$_[0]};
-	my @output;
-	push @output, "rowID".$del.join($del,@{$self->{header}});
-	foreach my $row (@names){
-		die "Cannot find $row in data hash. Ruh roh.\n\n" unless defined $self->{perturbation}{$row};
-		my $line=$row.$del.join($del,@{$self->{perturbation}{$row}});
-		push @output, $line;
-	}
-	hdpTools->printToFile($out,\@output);
-	return scalar(@output);
-}
-
-sub cleanRowIDsforWGCNA {
-	my $self=shift;
-	$self->{perturbation}={};
-	my @Rows=@{$self->{rowIDs}};
-	my @Names;
-	for(my$i=0;$i<=$#Rows;$i++){
-		my @D=@{$self->{data}{$Rows[$i]}};
-		my $n=$Rows[$i];
-		$n=~s/\|/-/;
-		$self->{perturbation}{$n}=\@D;
-		push @Names, $n;
-	}
-	return \@Names;
-}
-
-sub logNTransform {
-	my $self=shift;
-	$self->{perturbation}={};
-	my @Rows=@{$self->{rowIDs}};
-	for(my$i=0;$i<=$#Rows;$i++){
-		my @D=@{$self->{data}{$Rows[$i]}};
-		my @P;
-		foreach my $entry (@D){
-			my $log=log($entry);
-			push @P, $log;
-		}
-		$self->{perturbation}{$Rows[$i]}=\@P;
-	}
-	return \@Rows;
-}
-
-sub log2Transform {
-	my $self=shift;
-	$self->{perturbation}={};
-	my @Rows=@{$self->{rowIDs}};
-	for(my$i=0;$i<=$#Rows;$i++){
-		my @D=@{$self->{data}{$Rows[$i]}};
-		my @P;
-		foreach my $entry (@D){
-			my $log2;
-			if($entry==0){
-				$log2=0;
-			}else{
-				$log2=hdpTools->log2($entry);
-			}
-			push @P, $log2;
-		}
-		$self->{perturbation}{$Rows[$i]}=\@P;
-	}
-	return \@Rows;
-}
-
 sub getDataByID {
 	my $self=shift;
 	my $id=shift;
@@ -225,7 +155,7 @@ sub loadFile {
 	my $self=shift;
 	my $file=shift;
 	my $del =shift;
-	my @File=@{hdpTools->LoadFile($file)};
+	my @File=@{Tools->LoadFile($file)};
 	my @Header=split($del,shift @File);
 	my $junk=shift @Header;
 	$self->{header}=\@Header;
@@ -243,6 +173,28 @@ sub loadFile {
 	return scalar(keys(%{$self->{data}}));
 }
 
+sub getWidth {
+	my $self=shift;
+	my $N=scalar(@{$self->{data}{${$self->{rowIDs}}[0]}});
+	return $N;
+}
+
+sub getHeight {
+	my $self=shift;
+	return scalar(keys %{$self->{data}});
+}
+
+sub addRow {
+	my $self=shift;
+	my @R=@{$_[0]};
+	my $ID=shift @R;
+	die "Cannot add a row of unequal length to the current frame! (Row length : ".getWidth($self).", matrix width: ".scalar(@R).")\n" unless scalar(@R) == getWidth($self);
+	die "Cannot add a row with ID of $ID - already defined in matrix\n\n" if defined $self->{data}{$ID};
+	push @{$self->{rowIDs}}, $ID;
+	$self->{data}{$ID}=\@R;
+	return scalar(keys(%{$self->{data}}));
+}
+
 sub printFile {
 	my $self=shift;
 	my $out =shift;
@@ -254,7 +206,7 @@ sub printFile {
 		my $line=$row.$del.join($del,@{$self->{data}{$row}});
 		push @output, $line;
 	}
-	hdpTools->printToFile($out,\@output);
+	Tools->printToFile($out,\@output);
 	return scalar(@output);
 }
 

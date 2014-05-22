@@ -8,17 +8,8 @@ package NetworkTools;
 use Benchmark;
 use threads;
 
-
-my $R=Statistics::R->new();
-$R->stop();
-$R->start();
-
-$R->send("library(dynamicTreeCut)");
-$R->send("library(WGCNA");
-
-
 ###### No constructor. This isn't a network object, it is a method box. 
-
+our $R="bogus";
 sub generateDendroColorPlot {
 	my $self=shift;
 	my $Tree=shift;
@@ -236,17 +227,12 @@ sub getRobjFromFile {
 
 sub saveRobjToAscii {
 	my $self=shift;
-	my $file=shift;
+	my $R=shift;
 	my $Rvar=shift;
-#	my $Rcmd="FILE <- file(description=\"$file\");";
-#	$R->send($Rcmd);
+	my $file=shift;
 	my $Rcmd="save($Rvar, file=\"$file\", ascii=TRUE);";
-	warn "Writing $Rvar to ASCII $file...\n";
-	my $t0=Benchmark->new();
+	warn  $Rcmd."\n";
 	$R->send($Rcmd);
-	my $t1=Benchmark->new();
-	my $td= timediff($t1,$t0);
-	warn "Elapsed time: ".timestr($td)."\n";
 	return 1;
 }
 
@@ -254,15 +240,8 @@ sub saveRobjToFile {
 	my $self=shift;
 	my $file=shift;
 	my $Rvar=shift;
-#	my $Rcmd="FILE <- file(description=\"$file\");";
-#	$R->send($Rcmd);
 	my $Rcmd="save($Rvar, file=\"$file\");";
-	warn "Writing $Rvar to $file...\n";
-	my $t0=Benchmark->new();
 	$R->send($Rcmd);
-	my $t1=Benchmark->new();
-	my $td= timediff($t1,$t0);
-	warn "Elapsed time: ".timestr($td)."\n";
 	return 1;
 }
 
@@ -305,20 +284,23 @@ sub getMatrixEntryOf {
 	return $R->read();
 }
 
+sub getMatrixHeader {
+	my $self=shift;
+	my $R=shift;
+	my $val=shift;
+	my $cmd="colnames($val)";
+	$R->send($cmd);
+	return _parseVector($R->read());
+}
+
 sub getMatrixRow {
 	my $self=shift;
+	my $R=shift;
 	my $val=shift;
 	my $row=shift;
 	my $cmd="$val\[$row,\]";
 	$R->send($cmd);
-	return $R->read();
-}
-
-sub startRlog {
-	my $self=shift;
-	my $logFile=shift;
-	open(RLOG,">",$logFile) || die "cannot open $logFile!\n$!\nexiting...\n";
-	return 1;
+	return _parseMatrixRow($R->read());
 }
 
 
@@ -380,40 +362,6 @@ sub runCorrelation {
 	return $ret;
 }
 
-sub sendFrameToRMatrix {
-	my $self	=shift;
-	my $R		=shift;
-	my $Var	=shift;
-	my $DataFrame	=shift;
-	my $header	=$DataFrame->getHeader();
-	my $nrow	=$DataFrame->getHeight();
-	my $ncol	=$DataFrame->getWidth();
-
-	my $matrixString	="$Var <- matrix(c(";
-	my $matrixBody;
-	my $matrixFoot	="), nrow=$nrow,ncol=$ncol,byrow=TRUE)";
-
-	my @ids;
-	while(my$row=$DataFrame->getThisRow()){
-		my $ID=$DataFrame->getThisID();
-		push @ids, $ID;
-		if(defined($matrixBody)){
-			$matrixBody=join(",",@$row);
-		}else{
-			$matrixBody.=",".join(",",@row);
-		}
-		$DataFrame->iterateRow();
-	}
-
-	my $valueLine=$matrixString.$matrixBody.$matrixFoot;
-	my $headernames="colnames($ExpVar) = c(".join(@$header,",".")";
-	my $rownames   ="row.names($ExpVar) = c(".join(@ids,",").")";
-	$R->send($valueLine);
-	$R->send($headernames);
-	$R->send($rownames);
-	return 1;
-}
-
 sub sendFileToRFrame {
 	my $self	=shift;
 	my $R		=shift;
@@ -443,6 +391,7 @@ sub _parseVector { ##Victor
 	my @lines=split(/\n/,$vector);
 	my $header=shift @lines if $lines[0]=~m/\$/;
 	foreach my $line (@lines){
+		$line=~s/\"//g;
 		$line=~s/\s*\[\d+\]\s+//;
 		my @line=split(/\s+/,$line);
 	#	@line = map{$_=~s/\"//g} @line;
@@ -509,6 +458,25 @@ sub _parseHeightMatrix {
 		map {push @ret, $_} @line
 	}
 	return \@ret;
+}
+
+sub _parseMatrixRow {
+	my $row=shift;
+	my @data=split("\n",$row);
+	my @headers;
+	my @values;
+	my $ID;
+	for(my$i=0;$i<=$#data-1;$i+=2){
+		my $head=$data[$i];
+		my $data=$data[$i+1];
+		$head=~s/^\s+//;
+		@headers=(@headers,split(/\s+/,$head));
+		my @row=split(/\s+/,$data);
+		$ID=shift @row;
+		@values=(@values,@row);
+
+	}
+	return ($ID,\@headers,\@values);
 }
 
 sub _parseMergeMatrix {
