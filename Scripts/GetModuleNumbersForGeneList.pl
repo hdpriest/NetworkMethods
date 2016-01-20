@@ -10,25 +10,29 @@ my $list=$ARGV[1];
 die "usage: perl $0 <input directory> <gene list>\n\n" unless $#ARGV==1;
 
 opendir(DIR,$Dir) || die "cannot open directory $Dir\n";
-my @Files=grep {m/Cluster/} readdir(DIR);
+my @Files=readdir(DIR);
 closedir DIR;
 
 my @list=@{hdpTools->LoadFile($list)};
 my %list;
-map {$list{$_}=1} @list;
+map {$list{$_}="none"} @list;
 
 my @Output;
 foreach my $file (@Files){
+	next unless (($file=~m/Cluster/i)||($file=~m/Module/i));
 	my $Path=$Dir."/".$file;
 	my $mod=$file;
 	$mod=~s/\.txt//;
 	$mod=~s/Cluster\.//;
 	my @List=@{hdpTools->LoadFile($Path)};
 	foreach my $gene (@List){	
-		next unless defined $list{$gene};
-		my $output=$gene."\t".$mod;
-		push @Output, $output;
+		if(defined($list{$gene})){
+			$list{$gene}=$mod;
+		}else{
+		#	my $output=$gene."\t"."none";
+		#	push @Output, $output;
+		}
 	}
 }
-
+map {push @Output, "$_\t".$list{$_} } keys %list;
 print join("\n",@Output)."\n";

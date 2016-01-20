@@ -83,6 +83,21 @@ sub log2 {
 	}
 }
 
+sub absoluteLog2DiffMeanCentralizeArray {
+	# - this is just silly - there must be a better way?
+	my $self=shift;
+	my @A=@{$_[0]};
+	my $mean=mean($self,@A);
+	my $log2_mean = log($mean)/(log(2));
+	for(my$i=0;$i<=$#A;$i++){
+		my $this_log2 = log($A[$i])/(log(2));
+#		$A[$i]=abs($this_log2-$log2_mean);
+		$A[$i]=$this_log2-$log2_mean;
+		# yeah, it is just abs(log2(mean-normalized array)). Maths!
+	}
+	return \@A;
+}
+
 sub averageNormalizeArray { 
 	my $self=shift;
 	my @A=@{$_[0]};
@@ -233,7 +248,7 @@ sub stdev {
 sub LoadDir {
 	my $self=shift;
 	my $dir=shift;
-	opendir(DIR,$dir) || die "cannoe open $dir!\n$!\nexiting...\n";
+	opendir(DIR,$dir) || die "cannot open directory: $dir!\n$!\nexiting...\n";
 	my @files=readdir(DIR);
 	closedir DIR;
 	return \@files;

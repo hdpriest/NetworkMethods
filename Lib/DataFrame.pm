@@ -18,6 +18,7 @@ sub new {
 		header	=> [],
 		data		=> {},
 		rowIDs	=> [], #### Row identifiers, in order. NEVER ALTER.
+		IDindex 	=> {},
 		currentRow	=> undef,
       };
       bless $self, $class;
@@ -34,6 +35,45 @@ sub initRowIterator {
 	my $self=shift;
 	$self->{currentRow}=0;
 	return 1;
+}
+
+sub createIdByIndex {
+	my $self=shift;
+	my %h;
+	for(my $i=0;$i<=$#{$self->{rowIDs}};$i++){
+		my $id = ${$self->{rowIDs}}[$i];
+		$h{$id}=$i;
+	}
+	$self->{IDindex}=\%h;
+	return 1;
+}
+
+sub getIndexOfGene {
+	my $self=shift;
+	my $gene=shift;
+	if(defined($self->{IDindex}{$gene})){
+		return $self->{IDindex}{$gene};
+	}else{
+		return undef;
+	}
+	return undef;
+}
+
+sub getIDbyIndex {
+	my $self=shift;
+	my $index=shift;
+	if($index>$#{$self->{rowIDs}}){
+		return undef;
+	}else{
+		my $ID=$self->{rowIDs}[$index];
+		return $ID;
+	}
+	return undef;
+}
+
+sub getAllIDs {
+	my $self=shift;
+	return $self->{rowIDs};
 }
 
 sub getThisID {
@@ -141,7 +181,7 @@ sub printPerturbedFrame {
 		my $line=$row.$del.join($del,@{$self->{perturbation}{$row}});
 		push @output, $line;
 	}
-	hdpTools->printToFile($out,\@output);
+	Tools->printToFile($out,\@output);
 	return scalar(@output);
 }
 
@@ -209,7 +249,7 @@ sub log2Transform {
 			if($entry==0){
 				$log2=0;
 			}else{
-				$log2=hdpTools->log2($entry);
+				$log2=Tools->log2($entry);
 			}
 			push @P, $log2;
 		}
@@ -235,7 +275,7 @@ sub getDataByID_withZeros {
 	my @output;
 	if(defined($self->{data}{$id})){
 		@output=@{$self->{data}{$id}};
-		my $max = hdpTools->max(@output);
+		my $max = Tools->max(@output);
 		warn "$id has all-zero entries\n" if $max == 0;
 	}else{
 		my @empty;
@@ -256,7 +296,7 @@ sub getDataByID {
 	my @output;
 	if(defined($self->{data}{$id})){
 		@output=@{$self->{data}{$id}};
-		my $max = hdpTools->max(@output);
+		my $max = Tools->max(@output);
 		warn "$id has all-zero entries\n" if $max == 0;
 	}else{
 		my @empty;
@@ -337,7 +377,7 @@ sub loadFile {
 	my $self=shift;
 	my $file=shift;
 	my $del =shift;
-	my @File=@{hdpTools->LoadFile($file)};
+	my @File=@{Tools->LoadFile($file)};
 	my @Header=split($del,shift @File);
 	my $junk=shift @Header;
 	$self->{header}=\@Header;
@@ -345,13 +385,13 @@ sub loadFile {
 		my @line=split($del,$line);
 		my $rowID=shift @line;
 		if(defined($self->{data}{$rowID})){
-			my $max = hdpTools->max(@{$self->{data}{$rowID}});
-			my $t_max = hdpTools->max(@line);
+			my $max = Tools->max(@{$self->{data}{$rowID}});
+			my $t_max = Tools->max(@line);
 			if($t_max > $max){
 				$self->{data}{$rowID} = \@line;
-				warn "Encountered Duplicate Row IDs, Updating $rowID (stored maximum lt current maximum)\n";
+#				warn "Encountered Duplicate Row IDs, Updating $rowID (stored maximum lt current maximum)\n";
 			}else{
-				warn "Encountered Duplicate Row IDs. Not updating $rowID (stored maximum gt current max)\n";
+#				warn "Encountered Duplicate Row IDs. Not updating $rowID (stored maximum gt current max)\n";
 			}
 		}else{
 			push @{$self->{rowIDs}}, $rowID;
@@ -373,7 +413,7 @@ sub printFile {
 		my $line=$row.$del.join($del,@{$self->{data}{$row}});
 		push @output, $line;
 	}
-	hdpTools->printToFile($out,\@output);
+	Tools->printToFile($out,\@output);
 	return scalar(@output);
 }
 

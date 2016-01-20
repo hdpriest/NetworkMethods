@@ -36,8 +36,11 @@ foreach my $file (@ARGV){
 	foreach my $gene (@D){
 		if(defined($Data{$gene})){
 			my @Data=@{$Data{$gene}};
+			next unless _CheckData(@Data);
 			my $id=shift @Data;
-			my $FC = hdpTools->max(@Data)/hdpTools->min(@Data);
+			my $min=hdpTools->min(@Data);
+			$min = 0.2 if $min==0;
+			my $FC = hdpTools->max(@Data)/$min;
 			next unless $FC > $cutoff;
 			my @norm=@{hdpTools->averageNormalizeArray(\@Data)};
 			for(my$i=0;$i<=$#norm;$i++){
@@ -47,4 +50,9 @@ foreach my $file (@ARGV){
 	}
 }
 
-
+sub _CheckData {
+	my $id=shift @_;
+	my $max=hdpTools->max(@_);
+	return 0 if $max ==0;
+	return 1; 
+}

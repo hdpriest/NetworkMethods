@@ -24,7 +24,6 @@ my $anno_desc_col= $Config->get("OPTIONS","Annotation_description_column");
 my $Adj		= $NetDir."/Adjacency.cytoscape.raw.tab";
 my $ClusterDir	= $NetDir."/Clusters";
 my $Dbase	= $Config->get("OPTIONS","DBName");
-my $Species = $Config->get("OPTIONS","Species");
 my $Mask	= $Config->get("OPTIONS","MaskLevel");
 my $regex = $Config->get("OPTIONS","RegularExpression");
 my $displayName = $Config->get("OPTIONS","DisplayName");
@@ -49,7 +48,7 @@ print $Create."\n";
 print $Statement."\n";
 
 warn "Creating Gene Load Inserts...\n";
-my $GeneLoadCommand = _loadGenes($Dbase,$Prefix,$regex,$displayName,$Species,\%Genes);
+my $GeneLoadCommand = _loadGenes($Dbase,$Prefix,$regex,$displayName,\%Genes);
 print $GeneLoadCommand."\n";
 #print "DO SLEEP(5);\n";
 warn "Creating Expression Load Inserts...\n";
@@ -62,8 +61,6 @@ print $AnnotationLoadCommand."\n";
 warn "Creating Cluster Load Inserts...\n";
 my $ClusterLoadCommand = _loadClusters($Dbase,$Prefix,$ClusterDir,\%Genes);
 print $ClusterLoadCommand."\n";
-my $ClusterAnnotateCommand = _loadClusterAnnotation($Dbase,$Prefix,$Config);
-print $ClusterAnnotateCommand."\n";
 #print "DO SLEEP(5);\n";
 warn "Creating Adjacency Load Inserts...\n";
 my $AdjacencyLoadCommand = _loadAdjacency($Dbase,$Prefix,$Adj,$Mask,\%Genes);
@@ -73,39 +70,6 @@ warn "Creating Metrics Load Inserts...\n";
 my $MetricLoadCommand = _prepNetworkMetrics(\%Genes,$inputExpression,$Dbase,$Prefix,$Adj,$ClusterDir,$Mask);
 print $MetricLoadCommand."\n";
 warn "Done.\n";
-
-sub _loadClusterAnnotation {
-	my $statement="";
-	my $Dbase = shift;
-	my $Prefix = shift;
-	my $Config = shift;
-	return $statement unless $Config->get("CLUSTER_ANNOTATION","Load_Annotations") == 1;
-	my $dir 	= $Config->get("OPTIONS","NetworkDir")."/".$Config->get("CLUSTER_ANNOTATION","Annotation_subdirectory");
-	my $del 	= $Config->get("CLUSTER_ANNOTATION","delimiter");
-	my $term_col= $Config->get("CLUSTER_ANNOTATION","term_column");
-	my $desc_col= $Config->get("CLUSTER_ANNOTATION","description_column");
-	my $fdrp_col= $Config->get("CLUSTER_ANNOTATION","FDR_column");
-	my $fdr_cut = $Config->get("CLUSTER_ANNOTATION","FDR_maximum_cutoff");
-	my $file_reg= $Config->get("CLUSTER_ANNOTATION","File_Regex");
-	my @Files = grep {m/$file_reg/} @{Tools->LoadDir($dir)};
-	foreach my $file (@Files){
-		my $path = $dir."/".$file;
-		$file=~m/\.(\d+)\./;
-		my $cid = $1;
-		my @content = @{Tools->LoadFile($path)};
-		foreach my $line (@content){
-			my @line=split($del,$line);
-			my $term = $line[$term_col];
-			my $desc = $line[$desc_col];
-			my $fdrp = $line[$fdrp_col];
-			$fdrp = 0 if $fdrp eq "NA";
-			next if ($fdrp > $fdr_cut);
-			$fdrp = sprintf("%.5f",$fdrp);
-			$statement .= "INSERT INTO `$Dbase`.`$Prefix"."_Clusters_Annotations` (`Cluster`,`term`,`description`,`FDR_p`) VALUES ($cid,'$term','$desc','$fdrp');\n";
-		}
-	}
-	return $statement;
-}
 
 sub _loadAdjacency {
 	my $DB = shift;
@@ -372,15 +336,11 @@ sub _loadAnnotation {
 			$desc=$A{$gene}{'desc'};
 		}
 		$name = "None" if $name eq "";
-		$name=~s/\\//g;
 		$name=~s/\,/ /g;
-		$name=~s/'//g;
-		$name=~s/\\'//g;
-		$desc=~s/\\//g;
+		$name=~s/\'//g;
 		$desc=~s/\,/ /g;
-		$desc=~s/'//g;
-		$desc=~s/\\'//g;
-		my $insert = "INSERT INTO `$DB`.`$Prefix"."_Annotation` (`id`,`locus`,`name`,`description`) VALUES ($id,'$gene','$name','$desc');\n";
+		$desc=~s/\'//g;
+		my $insert = "INSERT INTO `$DB`.`$Prefix"."_Annotation` (`id`,`locus`,`name`,`description`) VALUES ($id,\'$gene\',\'$name\',\'$desc\');\n";
 		$statement.=$insert;
 	}
 	return $statement;
@@ -426,8 +386,7 @@ sub _getMapStatement{
 	my $regex=shift;
 	my $Prefix=shift;
 	my $dispname=shift;
-	my $species=shift;
-	my $statement="INSERT INTO `$Dbase`.`MapReference` (`prefix`,`display_name`,`regex`,`species`) VALUES ('$Prefix','$dispname','$regex','$species');\n";
+	my $statement="INSERT INTO `$Dbase`.`MapReference` (`prefix`,`display_name`,`regex`) VALUES ('$Prefix','$dispname','$regex');\n";
 	return $statement;
 }
 
@@ -436,10 +395,9 @@ sub _loadGenes {
 	my $Prefix= shift;
 	my $regex = shift;
 	my $displayName = shift;
-	my $species=shift;
 	my %Genes = %{$_[0]};
 	my $File = "$cwd/".$Prefix.".geneLoad.csv";
-	my $mapStatement = _getMapStatement($Dbase,$regex,$Prefix,$displayName,$species);
+	my $mapStatement = _getMapStatement($Dbase,$regex,$Prefix,$displayName);
 	my @output;
 	foreach my $key (keys %Genes){
 		my $line="$Genes{$key},$key";
@@ -574,7 +532,7 @@ ENGINE = MyISAM;
 CREATE TABLE IF NOT EXISTS `$dbase`.`MapReference` (
   `prefix` VARCHAR(45) NOT NULL,
   `display_name` VARCHAR(45) NOT NULL,
-  `regex` VARCHAR(1064) NOT NULL,
+  `regex` VARCHAR(45) NOT NULL,
   INDEX `prefix_idx` (`prefix` ASC),
   INDEX `name_idx` (`display_name` ASC),
   INDEX `regex_idx` (`regex` ASC))
@@ -638,22 +596,6 @@ CREATE TABLE IF NOT EXISTS `$dbase`.`$Prefix"."_Clusters_Genes` (
     ON DELETE NO ACTION
     ON UPDATE NO ACTION,
   CONSTRAINT `cluster`
-    FOREIGN KEY (`Cluster`)
-    REFERENCES `$dbase`.`$Prefix"."_Clusters` (`clusterID`)
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION)
-ENGINE = MyISAM;
-
--- -----------------------------------------------------
--- Table `$dbase`.`$Prefix"."_Clusters_Annotations`
--- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS `$dbase`.`$Prefix"."_Clusters_Annotations` (
-  `Cluster` INT NOT NULL,
-  `term` VARCHAR(45) NOT NULL,
-  `description` VARCHAR(4096) NOT NULL,
-  `FDR_p` DOUBLE NOT NULL,
-  INDEX `ind_cluster` (`Cluster` ASC),
-  CONSTRAINT `cluster_ann`
     FOREIGN KEY (`Cluster`)
     REFERENCES `$dbase`.`$Prefix"."_Clusters` (`clusterID`)
     ON DELETE NO ACTION

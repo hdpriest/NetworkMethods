@@ -52,6 +52,9 @@ sub _genR_frame {
 	my @output;
 	push @output, "GeneID,Sample,Expression";
 	my %max_sorted;
+	my @new;
+	map {push @new, $_."F_at";push @new, $_."R_st"} @Genes;
+	@Genes=@new;
 	foreach my $gene (@Genes){
 		if($Frame->getDataByID($gene)){
 			my @row=@{$Frame->getDataByID($gene)};
@@ -112,6 +115,7 @@ sub _RFrameToPNG {
 	#warn $result."\n";
 	$cmd="dev.off()";
 	$R->send($cmd);
+	#`rm -rf $file`;
 	return 1;
 }
 
